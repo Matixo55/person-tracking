@@ -1,0 +1,450 @@
+
+20032.mp4:
+  yolov8m: 1.0000
+  yolov8l: 1.0000
+  yolov8x: 1.0000
+  yolov5s6u: 1.0000
+  yolov5m6u: 1.0000
+  yolo11n: 1.0000
+  yolo11s: 1.0000
+  yolo11m: 1.0000
+  yolo11l: 1.0000
+  yolo11x: 1.0000
+  yolov10m: 1.0000
+  yolov9t: 1.0000
+  yolov9m: 1.0000
+  yolo12n: 1.0000
+  yolo12s: 1.0000
+  yolo12l: 1.0000
+  yolo12x: 1.0000
+  yolov5n6u: 0.9994
+  yolov10x: 0.9994
+  yolov9c: 0.9994
+  yolov9e: 0.9994
+  yolo12m: 0.9994
+  yolov8n: 0.9988
+  yolov8s: 0.9988
+  yolov5l6u: 0.9988
+  yolov10b: 0.9952
+  yolov10s: 0.9940
+  yolov10n: 0.9927
+  yolov5x6u: 0.9921
+  yolov9s: 0.9915
+
+39051.mp4:
+  yolov8l: 0.9238
+  yolov8x: 0.9226
+  yolov8m: 0.9201
+  yolo11s: 0.9181
+  yolo11m: 0.9181
+  yolov9e: 0.9168
+  yolov5m6u: 0.9144
+  yolov5l6u: 0.9144
+  yolo11x: 0.9140
+  yolo11l: 0.9136
+  yolov10m: 0.9091
+  yolo12s: 0.9091
+  yolov9t: 0.9086
+  yolov9m: 0.9074
+  yolo12m: 0.9054
+  yolo12l: 0.9045
+  yolov9s: 0.9037
+  yolov8s: 0.9025
+  yolov10b: 0.9021
+  yolov10x: 0.9000
+  yolo12x: 0.8968
+  yolov5s6u: 0.8935
+  yolov5x6u: 0.8931
+  yolov5n6u: 0.8902
+  yolo12n: 0.8894
+  yolo11n: 0.8890
+  yolov9c: 0.8869
+  yolov8n: 0.8837
+  yolov10s: 0.8525
+  yolov10n: 0.7710
+
+39271.mp4:
+  yolov9t: 0.7833
+  yolo12m: 0.7832
+  yolo12l: 0.7832
+  yolov9e: 0.7831
+  yolov8x: 0.7830
+  yolov9s: 0.7830
+  yolov8l: 0.7829
+  yolo11s: 0.7829
+  yolo11m: 0.7829
+  yolo12x: 0.7827
+  yolov9m: 0.7826
+  yolo11x: 0.7824
+  yolov8n: 0.7823
+  yolov8s: 0.7820
+  yolov8m: 0.7819
+  yolov9c: 0.7819
+  yolov10b: 0.7818
+  yolov5m6u: 0.7817
+  yolov10x: 0.7817
+  yolo11l: 0.7810
+  yolo12s: 0.7807
+  yolov10m: 0.7793
+  yolo12n: 0.7792
+  yolov5x6u: 0.7789
+  yolo11n: 0.7777
+  yolov5l6u: 0.7773
+  yolov5s6u: 0.7766
+  yolov5n6u: 0.7764
+  yolov10s: 0.7725
+  yolov10n: 0.7659
+
+39931.mp4:
+  yolo11x: 0.8565
+  yolo12m: 0.8557
+  yolo12x: 0.8557
+  yolov9e: 0.8552
+  yolo12l: 0.8547
+  yolo12s: 0.8537
+  yolov8m: 0.8522
+  yolov8l: 0.8522
+  yolov5m6u: 0.8522
+  yolov8x: 0.8517
+  yolo11l: 0.8517
+  yolov5l6u: 0.8506
+  yolo11s: 0.8496
+  yolov9c: 0.8496
+  yolo11m: 0.8494
+  yolov5s6u: 0.8491
+  yolov9m: 0.8476
+  yolov8s: 0.8473
+  yolov10x: 0.8468
+  yolov10b: 0.8463
+  yolo12n: 0.8445
+  yolov5x6u: 0.8435
+  yolov10m: 0.8425
+  yolo11n: 0.8415
+  yolov9s: 0.8415
+  yolov10s: 0.8392
+  yolov5n6u: 0.8336
+  yolov9t: 0.8303
+  yolov8n: 0.8257
+  yolov10n: 0.8005
+
+40181.mp4:
+  yolov5n6u: 0.7029
+  yolov9t: 0.7018
+  yolov9s: 0.6856
+  yolov8s: 0.6804
+  yolo11n: 0.6733
+  yolov5s6u: 0.6707
+  yolov9c: 0.6700
+  yolov8x: 0.6684
+  yolov9m: 0.6672
+  yolov10m: 0.6671
+  yolov5m6u: 0.6654
+  yolo11l: 0.6654
+  yolov8m: 0.6648
+  yolo11m: 0.6637
+  yolov9e: 0.6637
+  yolov5l6u: 0.6623
+  yolo11x: 0.6620
+  yolo12l: 0.6611
+  yolo12n: 0.6605
+  yolo12s: 0.6589
+  yolov8l: 0.6584
+  yolov10b: 0.6545
+  yolo12x: 0.6539
+  yolov10x: 0.6522
+  yolov5x6u: 0.6518
+  yolo11s: 0.6505
+  yolov10s: 0.6491
+  yolo12m: 0.6486
+  yolov8n: 0.6434
+  yolov10n: 0.5868
+
+40241.mp4:
+  yolov8m: 0.9836
+  yolov9s: 0.9824
+  yolo12s: 0.9786
+  yolov9m: 0.9769
+  yolov5m6u: 0.9766
+  yolo11m: 0.9760
+  yolov5n6u: 0.9752
+  yolov8l: 0.9751
+  yolo12x: 0.9751
+  yolo11l: 0.9748
+  yolo11x: 0.9741
+  yolo11s: 0.9738
+  yolov9e: 0.9732
+  yolov5s6u: 0.9726
+  yolov9c: 0.9720
+  yolov8s: 0.9707
+  yolov8x: 0.9697
+  yolo12n: 0.9679
+  yolov10b: 0.9635
+  yolo12m: 0.9625
+  yolo12l: 0.9624
+  yolo11n: 0.9607
+  yolov10x: 0.9592
+  yolov5l6u: 0.9576
+  yolov5x6u: 0.9558
+  yolov10m: 0.9550
+  yolov8n: 0.9547
+  yolov10s: 0.9486
+  yolov9t: 0.9167
+  yolov10n: 0.8442
+
+40752.mp4:
+  yolo12x: 0.9142
+  yolov8l: 0.9134
+  yolov5l6u: 0.9101
+  yolov5m6u: 0.9079
+  yolov9m: 0.9078
+  yolo11m: 0.9077
+  yolo11s: 0.9067
+  yolov9e: 0.9041
+  yolov8s: 0.9032
+  yolov9c: 0.9032
+  yolo11x: 0.9012
+  yolov8m: 0.9009
+  yolo11l: 0.8986
+  yolo12l: 0.8974
+  yolov9s: 0.8953
+  yolov8x: 0.8930
+  yolo12m: 0.8921
+  yolo12s: 0.8868
+  yolov10b: 0.8733
+  yolov10m: 0.8600
+  yolov5s6u: 0.8578
+  yolov5x6u: 0.8540
+  yolov10s: 0.8487
+  yolov10x: 0.8480
+  yolo11n: 0.8442
+  yolo12n: 0.8395
+  yolov5n6u: 0.8349
+  yolov9t: 0.8134
+  yolov10n: 0.7949
+  yolov8n: 0.7848
+
+40792.mp4:
+  yolov8s: 0.9762
+  yolo12s: 0.9755
+  yolo11s: 0.9746
+  yolov9c: 0.9698
+  yolo11l: 0.9695
+  yolov9m: 0.9661
+  yolo11m: 0.9658
+  yolo12m: 0.9647
+  yolov8m: 0.9632
+  yolov5s6u: 0.9627
+  yolov5l6u: 0.9622
+  yolov10s: 0.9618
+  yolov8x: 0.9607
+  yolo12x: 0.9600
+  yolov5m6u: 0.9598
+  yolo11x: 0.9594
+  yolo12l: 0.9589
+  yolov9e: 0.9574
+  yolov8l: 0.9573
+  yolov9s: 0.9567
+  yolov10b: 0.9526
+  yolo12n: 0.9517
+  yolov10m: 0.9513
+  yolo11n: 0.9500
+  yolov5x6u: 0.9430
+  yolov8n: 0.9372
+  yolov10x: 0.9306
+  yolov9t: 0.9267
+  yolov10n: 0.9208
+  yolov5n6u: 0.9062
+
+40992.mp4:
+  yolo12x: 0.8903
+  yolov5x6u: 0.8897
+  yolov5l6u: 0.8893
+  yolov9e: 0.8879
+  yolo11x: 0.8873
+  yolo11l: 0.8871
+  yolov8l: 0.8863
+  yolov8x: 0.8863
+  yolo12l: 0.8856
+  yolov5m6u: 0.8844
+  yolo11m: 0.8834
+  yolo12m: 0.8830
+  yolov9c: 0.8824
+  yolov8m: 0.8818
+  yolov5s6u: 0.8798
+  yolov9m: 0.8786
+  yolov10b: 0.8763
+  yolo11s: 0.8757
+  yolov10m: 0.8739
+  yolo12s: 0.8723
+  yolov8s: 0.8717
+  yolov10x: 0.8707
+  yolov9s: 0.8697
+  yolov10s: 0.8693
+  yolo12n: 0.8622
+  yolov5n6u: 0.8537
+  yolo11n: 0.8512
+  yolov9t: 0.8498
+  yolov10n: 0.8464
+  yolov8n: 0.8419
+
+39051.mp4:
+  yolov7-e6: 0.9123
+  yolov7x: 0.9115
+  yolov7-e6e: 0.9045
+  yolov7-d6: 0.8992
+  yolov7-w6: 0.8927
+  yolov7: 0.8878
+
+39271.mp4:
+  yolov7-e6: 0.7816
+  yolov7-w6: 0.7815
+  yolov7-d6: 0.7806
+  yolov7x: 0.7798
+  yolov7-e6e: 0.7791
+  yolov7: 0.7790
+
+39931.mp4:
+  yolov7-e6e: 0.8524
+  yolov7-w6: 0.8519
+  yolov7-d6: 0.8511
+  yolov7: 0.8509
+  yolov7x: 0.8501
+  yolov7-e6: 0.8501
+
+40181.mp4:
+  yolov7-e6e: 0.6601
+  yolov7-e6: 0.6577
+  yolov7-d6: 0.6550
+  yolov7-w6: 0.6540
+  yolov7x: 0.6464
+  yolov7: 0.6453
+
+40241.mp4:
+  yolov7-e6e: 0.9819
+  yolov7-e6: 0.9799
+  yolov7x: 0.9778
+  yolov7: 0.9771
+  yolov7-d6: 0.9767
+  yolov7-w6: 0.9737
+
+40752.mp4:
+  yolov7-e6: 0.9145
+  yolov7-w6: 0.9021
+  yolov7-e6e: 0.8973
+  yolov7-d6: 0.8838
+  yolov7: 0.8818
+  yolov7x: 0.8757
+
+40792.mp4:
+  yolov7x: 0.9602
+  yolov7: 0.9589
+  yolov7-w6: 0.9544
+  yolov7-e6: 0.9537
+  yolov7-d6: 0.9481
+  yolov7-e6e: 0.9213
+
+40992.mp4:
+  yolov7-d6: 0.8895
+  yolov7-e6e: 0.8871
+  yolov7-e6: 0.8861
+  yolov7x: 0.8840
+  yolov7-w6: 0.8792
+  yolov7: 0.8725
+
+39051.mp4:
+  yolov6s: 0.9721
+  yolov6n: 0.9779
+  yolov6m: 0.9881
+  yolov6l: 0.9934
+  yolov6n6: 0.9709
+  yolov6s6: 0.9857
+  yolov6m6: 0.9922
+
+39271.mp4:
+  yolov6s: 0.9964
+  yolov6n: 0.9984
+  yolov6m: 0.9981
+  yolov6l: 0.9992
+  yolov6n6: 0.9958
+  yolov6s6: 0.9968
+  yolov6m6: 0.9991
+
+39931.mp4:
+  yolov6s: 0.9634
+  yolov6n: 0.9659
+  yolov6m: 0.9656
+  yolov6l: 0.9710
+  yolov6n6: 0.9735
+  yolov6s6: 0.9677
+  yolov6m6: 0.9697
+
+40181.mp4:
+  yolov6s: 0.9458
+  yolov6n: 0.9566
+  yolov6m: 0.9716
+  yolov6l: 0.9812
+  yolov6n6: 0.9865
+  yolov6s6: 0.9909
+  yolov6m6: 0.9933
+
+40241.mp4:
+  yolov6s: 0.9915
+  yolov6n: 0.9642
+  yolov6m: 0.9941
+  yolov6l: 0.9974
+  yolov6n6: 0.9950
+  yolov6s6: 0.9969
+  yolov6m6: 0.9977
+
+40752.mp4:
+  yolov6s: 0.9231
+  yolov6n: 0.9214
+  yolov6m: 0.9599
+  yolov6l: 0.9710
+  yolov6n6: 0.9328
+  yolov6s6: 0.9560
+  yolov6m6: 0.9690
+
+40792.mp4:
+  yolov6s: 0.9819
+  yolov6n: 0.9839
+  yolov6m: 0.9886
+  yolov6l: 0.9902
+  yolov6n6: 0.9678
+  yolov6s6: 0.9884
+  yolov6m6: 0.9899
+
+40992.mp4:
+  yolov6s: 0.8599
+  yolov6n: 0.8484
+  yolov6m: 0.8703
+  yolov6l: 0.8883
+  yolov6n6: 0.8705
+  yolov6s6: 0.8921
+  yolov6m6: 0.8923
+
+39051.mp4:
+  yolov6l6: 0.9959
+
+39271.mp4:
+  yolov6l6: 0.9969
+
+39931.mp4:
+  yolov6l6: 0.9687
+
+40181.mp4:
+  yolov6l6: 0.9945
+
+40241.mp4:
+  yolov6l6: 0.9977
+
+40752.mp4:
+  yolov6l6: 0.9699
+
+40792.mp4:
+  yolov6l6: 0.9901
+
+40992.mp4:
+  yolov6l6: 0.8925
+
+39051.mp4:

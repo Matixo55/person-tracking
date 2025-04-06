@@ -1,0 +1,6 @@
+*.pt
+.idea/
+*.pyc
+*.mp4
+*.jpg
+dataset/*
