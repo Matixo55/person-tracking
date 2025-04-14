@@ -1,24 +1,24 @@
-import cv2
-import json
-import os
-import numpy as np
-import multiprocessing
-import torch
-from ultralytics import YOLO
-import sys
 import glob
+import json
+import multiprocessing
+import os
 
-# Define YOLO model versions
-models = ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolov5n6u", "yolov5s6u", "yolov5m6u",
-          "yolov5l6u", "yolov5x6u", "yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt", "yolov10n.pt",
-          "yolov10s.pt", "yolov10m.pt", "yolov10b.pt", "yolov10x.pt", "yolov9t.pt", "yolov9s.pt", "yolov9m.pt",
-          "yolov9c.pt", "yolov9e.pt", "yolo12n.pt", "yolo12s.pt", "yolo12m.pt", "yolo12l.pt", "yolo12x.pt"]
-EXCLUDED_MODELS = []
+import cv2
+import numpy as np
+import torch
+import torch.serialization
+from tqdm import tqdm
 
-models = [model for model in models if model not in EXCLUDED_MODELS]
+from models.experimental import attempt_load
+from utils.general import non_max_suppression, scale_coords, set_logging
+from utils.torch_utils import select_device, time_synchronized
 
-# multiples of 32
-WIDTH, HEIGHT = 1920, 1088
+# Define YOLOv7 model versions
+models = ["yolov7.pt", "yolov7x.pt", "yolov7-w6.pt", "yolov7-e6.pt", "yolov7-d6.pt", "yolov7-e6e.pt"]
+
+# Multiple of 64
+WIDTH = 1920
+HEIGHT = 1088
 
 
 # Define IoU calculation function
@@ -37,32 +37,45 @@ def calculate_iou(box1, box2):
 
 
 def process_video(args):
-    video_path, model_version, MODE = args
-    sys.stderr = open(os.devnull, 'w')
+    video_path, model_path, DATASET = args
 
-    # Extract video name without extension
-    video_name = os.path.basename(video_path)
-    video_name_no_ext = os.path.splitext(video_name)[0]
-
-    # Load YOLO model
-    model_name = model_version.replace(".pt", "")
-    model = YOLO(f"models/{model_version}")
-
-    if MODE == "personpath22":
-        annotation_path = f"dataset/personpath22/annotation/anno_visible_2022/{video_name}.json"
+    video_name = os.path.splitext(os.path.basename(video_path))[0]
+    if DATASET == "personpath22":
+        annotation_path = f"../dataset/personpath22/annotation/anno_visible_2022/{video_name}.mp4.json"
 
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
     else:
-        annotation_path = f"dataset/DETRAC_Upload/labels/annotations/{video_name}.json"
+        annotation_path = f"../dataset/DETRAC_Upload/labels/annotations/{video_name}.mp4.json"
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
-    output_dir = f"output/{video_name_no_ext}"
+
+    # Create output directory
+    output_dir = f"../output/{video_name}"
     os.makedirs(output_dir, exist_ok=True)
 
     # Open video
     cap = cv2.VideoCapture(video_path)
+    orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
+
+    # Set output resolution
+    width, height = WIDTH, HEIGHT
+
+    # Extract model name
+    model_name = os.path.splitext(os.path.basename(model_path))[0]
+
+    print(f"Processing {model_name} on {video_name}...")
+
+    # Initialize YOLOv7
+    device = select_device('0')  # Use '' for CPU or '0' for GPU
+    # Use weights_only=False to handle YOLOv7 model loading
+    model = attempt_load(model_path, map_location=device)  # load FP32 model
+
+    # Half precision
+    model.half()  # to FP16
+    model(torch.zeros(1, 3, width, height).to(device).type_as(next(model.parameters())))
 
     # Track metrics
     total_annotations = 0
@@ -78,6 +91,9 @@ def process_video(args):
         if not ret:
             break
 
+        # Resize frame to target resolution
+        frame = cv2.resize(frame, (width, height))
+
         # Get annotations for this frame
         frame_annotations = [entity for entity in annotations.get("entities", [])
                              if entity.get("blob", {}).get("frame_idx") == frame_count]
@@ -87,18 +103,36 @@ def process_video(args):
             frame_count += 1
             continue
 
-        # Run YOLO on frame
-        results = model(frame, classes=[0, 1, 2, 3], verbose=False, imgsz=(WIDTH, HEIGHT), augment=(not model_version.startswith("yolov10")), half=True)
+        # Prepare image for YOLOv7
+        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = img.transpose(2, 0, 1)  # HWC to CHW
+        img = np.ascontiguousarray(img)
+        img = torch.from_numpy(img).to(device)
+        img = img.half()  # uint8 to fp16/32
+        img /= 255.0  # 0 - 255 to 0.0 - 1.0
+        if img.ndimension() == 3:
+            img = img.unsqueeze(0)
 
-        # Extract predictions from results
+        # Inference
+        t1 = time_synchronized()
+        with torch.no_grad():
+            pred = model(img, augment=False)[0]
+        t2 = time_synchronized()
+
+        # Apply NMS
+        pred = non_max_suppression(pred, conf_thres=0.25, iou_thres=0.45, classes=[0, 1, 2, 3])
+
+        # Process predictions
         predictions = []
-        for r in results:
-            boxes = r.boxes
-            for box in boxes:
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                conf = box.conf[0].cpu().numpy()
-                cls = box.cls[0].cpu().numpy()
-                predictions.append(np.array([x1, y1, x2, y2, conf, cls]))
+        for i, det in enumerate(pred):
+            if len(det):
+                # Rescale boxes from img_size to im0 size
+                det[:, :4] = scale_coords(img.shape[2:], det[:, :4], frame.shape).round()
+
+                # Convert to numpy array format similar to our other script
+                for *xyxy, conf, cls in det:
+                    x1, y1, x2, y2 = [int(x) for x in xyxy]
+                    predictions.append(np.array([x1, y1, x2, y2, conf.cpu().numpy(), cls.cpu().numpy()]))
 
         has_annotations = len(frame_annotations) > 0
         frame_detected = 0
@@ -107,7 +141,14 @@ def process_video(args):
         for annotation in frame_annotations:
             bb = annotation.get("bb", [])
             if bb:
-                x, y, w, h = int(bb[0]), int(bb[1]), int(bb[2]), int(bb[3])
+                # Scale bounding box coordinates to match the resized frame
+                scale_x = width / orig_width
+                scale_y = height / orig_height
+
+                x = int(bb[0] * scale_x)
+                y = int(bb[1] * scale_y)
+                w = int(bb[2] * scale_x)
+                h = int(bb[3] * scale_y)
 
                 # Red by default, green if detected
                 box_color = (0, 0, 255)  # Red by default (BGR format)
@@ -119,7 +160,7 @@ def process_video(args):
                 detected = False
                 for pred in predictions:
                     pred_box = pred[:4]
-                    anno_box_xyxy = [bb[0], bb[1], bb[0] + bb[2], bb[1] + bb[3]]
+                    anno_box_xyxy = [x, y, x + w, y + h]
                     iou = calculate_iou(pred_box, anno_box_xyxy)
                     if iou > 0.3:
                         detected = True
@@ -162,11 +203,15 @@ def process_video(args):
 
         # Draw frame info and metrics
         accuracy = detected_annotations / total_annotations if total_annotations > 0 else 0
+        inference_time = (t2 - t1) * 1000  # ms
+
         cv2.putText(frame, f"Frame: {frame_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         cv2.putText(frame, f"Accuracy: {accuracy:.2f} ({detected_annotations}/{total_annotations})",
                     (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         cv2.putText(frame, f"Model: {model_name}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         cv2.putText(frame, f"Video: {video_name}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(frame, f"Inference: {inference_time:.1f}ms", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                    (255, 255, 255), 2)
 
         # Store frame
         frames.append(frame)
@@ -176,7 +221,7 @@ def process_video(args):
     final_accuracy = detected_annotations / total_annotations if total_annotations > 0 else 0
 
     # Create output video with accuracy in the filename
-    output_video_path = os.path.join(output_dir, f"{final_accuracy:.4f}_{model_name}_{WIDTH}x{HEIGHT}.mp4")
+    output_video_path = os.path.join(output_dir, f"{final_accuracy:.4f}_{model_name}_{width}x{height}.mp4")
 
     # Write all stored frames to the video
     if frames:
@@ -188,44 +233,50 @@ def process_video(args):
 
     # Release resources
     cap.release()
-
     return video_name, model_name, final_accuracy
 
 
-def process_all_videos():
+def process_all_videos(DATASET, threads_num):
+    # Create results directory
+    os.makedirs("../results", exist_ok=True)
+
     # Get all MP4 files in the dataset directory
-    MODE = "personpath22"  # Change to "DETRAC" for DETRAC dataset
-    video_paths = glob.glob("dataset/personpath22/raw_data/*.mp4" if MODE == "personpath22" else "dataset/DETRAC_Upload/videos/*.mp4")
+    if DATASET == "personpath22":
+        video_paths = glob.glob("../dataset/personpath22/raw_data/*.mp4")
+    else:
+        video_paths = glob.glob("../dataset/DETRAC_Upload/videos/*.mp4")
+
 
     print(f"Found {len(video_paths)} videos to process")
 
     # Set up multiprocessing
     torch.multiprocessing.set_start_method("spawn", force=True)
 
-    # Create results directory
-    os.makedirs("results", exist_ok=True)
-
-    # Import tqdm for progress tracking
-    from tqdm import tqdm
-
     # Process one video at a time with progress bar
-    with open(f"results/all_results_{MODE}.txt", "a+") as f_all:
+    with open(f"../results/all_results_{DATASET}.txt", "a+") as f_all:
         for video_path in tqdm(video_paths):
             video_name = os.path.basename(video_path)
-            f_all.write(f"\n{video_name}:\n")
+            f_all.write(f"\n{video_name}.mp4:\n")
             print(f"\nProcessing video: {video_name}")
 
             # Create tasks for current video only
-            video_tasks = [(video_path, model, MODE) for model in models]
+            video_tasks = [(video_path, f"weights/{model}", DATASET) for model in models]
 
             # Process each model for this video in parallel
-            with multiprocessing.Pool(6) as pool:
+            with multiprocessing.Pool(threads_num) as pool:
                 video_results = pool.map(process_video, video_tasks)
 
             for _, model_name, accuracy in video_results:
                 f_all.write(f"  {model_name}: {accuracy:.4f}\n")
 
-
-
 if __name__ == "__main__":
-    process_all_videos()
+    # Set up logging
+    set_logging()
+
+    from models.yolo import Model
+
+    torch.serialization.add_safe_globals([Model])
+    DATASET = "personpath22" # DETRAC personpath22
+
+    # Process all videos
+    process_all_videos(DATASET, threads_num=2)

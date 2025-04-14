@@ -3,12 +3,25 @@ import json
 import os
 import numpy as np
 import multiprocessing
+import torch
+from ultralytics import YOLO
 import sys
 import glob
-import torch
-import openpifpaf
 
-# multiples of 32, same as original script
+"""
+Tylko modele ultralytics
+"""
+
+# Define YOLO model versions
+models = ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolov5n6u", "yolov5s6u", "yolov5m6u",
+          "yolov5l6u", "yolov5x6u", "yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt", "yolov10n.pt",
+          "yolov10s.pt", "yolov10m.pt", "yolov10b.pt", "yolov10x.pt", "yolov9t.pt", "yolov9s.pt", "yolov9m.pt",
+          "yolov9c.pt", "yolov9e.pt", "yolo12n.pt", "yolo12s.pt", "yolo12m.pt", "yolo12l.pt", "yolo12x.pt"]
+EXCLUDED_DATASETLS = []
+
+models = [model for model in models if model not in EXCLUDED_DATASETLS]
+
+# multiples of 32
 WIDTH, HEIGHT = 1920, 1088
 
 
@@ -28,33 +41,31 @@ def calculate_iou(box1, box2):
 
 
 def process_video(args):
-    video_path, model_name, MODE = args
+    video_path, model_version, DATASET = args
     sys.stderr = open(os.devnull, 'w')
 
     # Extract video name without extension
     video_name = os.path.basename(video_path)
     video_name_no_ext = os.path.splitext(video_name)[0]
 
-    # Initialize OpenPifPaf model
-    predictor = openpifpaf.Predictor(checkpoint=model_name, device="cuda:0")
+    # Load YOLO model
+    model_name = model_version.replace(".pt", "")
+    model = YOLO(f"weights/{model_version}")
 
-    # Load annotations
-    if MODE == "personpath22":
-        annotation_path = f"../dataset/personpath22/annotation/anno_visible_2022/{video_name}.json"
+    if DATASET == "personpath22":
+        annotation_path = f"dataset/personpath22/annotation/anno_visible_2022/{video_name}.json"
+
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
     else:
-        annotation_path = f"../dataset/DETRAC_Upload/labels/annotations/{video_name}.json"
+        annotation_path = f"dataset/DETRAC_Upload/labels/annotations/{video_name}.json"
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
-
     output_dir = f"output/{video_name_no_ext}"
     os.makedirs(output_dir, exist_ok=True)
 
     # Open video
     cap = cv2.VideoCapture(video_path)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
 
     # Track metrics
@@ -62,7 +73,7 @@ def process_video(args):
     detected_annotations = 0
     frame_count = 0
 
-    # Store frames to write to video later
+    # We'll create the output writer after determining final accuracy
     frames = []
 
     # Process frames
@@ -80,29 +91,18 @@ def process_video(args):
             frame_count += 1
             continue
 
-        # Run OpenPifPaf on frame
-        # OpenPifPaf expects PIL images
-        pil_img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        predictions, gt_anns, image_meta = predictor.numpy_image(pil_img)
+        # Run YOLO on frame
+        results = model(frame, classes=[0, 1, 2, 3], verbose=False, imgsz=(WIDTH, HEIGHT), augment=(not model_version.startswith("yolov10")), half=True)
 
-        # Extract bounding boxes from predictions
-        boxes = []
-        for pred in predictions:
-            # In detection mode, we can directly use the bounding box
-            if hasattr(pred, 'bbox') and pred.bbox is not None:
-                x1, y1, w, h = pred.bbox
-                x2, y2 = x1 + w, y1 + h
-                conf = pred.score if hasattr(pred, 'score') else 0.9  # Use score or default
-                boxes.append(np.array([x1, y1, x2, y2, conf, 0]))  # Class 0 for person
-            # Fallback to keypoint method if needed
-            elif hasattr(pred, 'data') and pred.data is not None:
-                keypoints = pred.data
-                keypoints = keypoints[keypoints[:, 2] > 0]  # Filter out low confidence keypoints
-                if len(keypoints) > 0:
-                    x1, y1 = keypoints[:, 0].min(), keypoints[:, 1].min()
-                    x2, y2 = keypoints[:, 0].max(), keypoints[:, 1].max()
-                    conf = np.mean(keypoints[:, 2])  # Average confidence
-                    boxes.append(np.array([x1, y1, x2, y2, conf, 0]))  # Class 0 for person
+        # Extract predictions from results
+        predictions = []
+        for r in results:
+            boxes = r.boxes
+            for box in boxes:
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                conf = box.conf[0].cpu().numpy()
+                cls = box.cls[0].cpu().numpy()
+                predictions.append(np.array([x1, y1, x2, y2, conf, cls]))
 
         has_annotations = len(frame_annotations) > 0
         frame_detected = 0
@@ -119,12 +119,12 @@ def process_video(args):
                 label = f"GT:{annotation.get('type', '')}"
                 cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
 
-                # Check if this annotation is detected by OpenPifPaf
+                # Check if this annotation is detected by YOLO
                 detected = False
-                for pred_box in boxes:
-                    pred_box_xyxy = pred_box[:4]
+                for pred in predictions:
+                    pred_box = pred[:4]
                     anno_box_xyxy = [bb[0], bb[1], bb[0] + bb[2], bb[1] + bb[3]]
-                    iou = calculate_iou(pred_box_xyxy, anno_box_xyxy)
+                    iou = calculate_iou(pred_box, anno_box_xyxy)
                     if iou > 0.3:
                         detected = True
                         break
@@ -151,15 +151,17 @@ def process_video(args):
             total_annotations += len(frame_annotations)
             detected_annotations += frame_detected
 
-        # Draw OpenPifPaf detections (blue boxes)
-        for box in boxes:
-            x1, y1, x2, y2, conf, cls = box.astype(float)
-            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+        # Draw YOLO detections (blue boxes)
+        for pred in predictions:
+            box = pred[:4].astype(int)
+            conf = pred[4]
+            cls = int(pred[5])
+            x1, y1, x2, y2 = box
 
-            # All OpenPifPaf boxes in blue
+            # Make all YOLO boxes blue
             color = (255, 0, 0)  # Blue in BGR format
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            label = f"PifPaf: {conf:.2f}"
+            label = f"YOLO:{cls} {conf:.2f}"
             cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
         # Draw frame info and metrics
@@ -183,7 +185,7 @@ def process_video(args):
     # Write all stored frames to the video
     if frames:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+        out = cv2.VideoWriter(output_video_path, fourcc, fps, (WIDTH, HEIGHT))
         for frame in frames:
             out.write(frame)
         out.release()
@@ -194,14 +196,9 @@ def process_video(args):
     return video_name, model_name, final_accuracy
 
 
-def process_all_videos():
-    # Define available OpenPifPaf models
-    pifpaf_models = ["shufflenetv2k16", "shufflenetv2k30", "resnet50", "resnet101", "resnet152"]
-
+def process_all_videos(DATASET, threads_num):
     # Get all MP4 files in the dataset directory
-    MODE = "personpath22"  # Change to "DETRAC" for DETRAC dataset
-    video_paths = glob.glob(
-        "../dataset/personpath22/raw_data/*.mp4" if MODE == "personpath22" else "../dataset/DETRAC_Upload/videos/*.mp4")
+    video_paths = glob.glob("dataset/personpath22/raw_data/*.mp4" if DATASET == "personpath22" else "dataset/DETRAC_Upload/videos/*.mp4")
 
     print(f"Found {len(video_paths)} videos to process")
 
@@ -215,22 +212,24 @@ def process_all_videos():
     from tqdm import tqdm
 
     # Process one video at a time with progress bar
-    with open(f"../results/all_results_{MODE}.txt", "a+") as f_all:
+    with open(f"results/all_results_{DATASET}.txt", "a+") as f_all:
         for video_path in tqdm(video_paths):
             video_name = os.path.basename(video_path)
             f_all.write(f"\n{video_name}:\n")
             print(f"\nProcessing video: {video_name}")
 
             # Create tasks for current video only
-            video_tasks = [(video_path, model, MODE) for model in pifpaf_models]
+            video_tasks = [(video_path, model, DATASET) for model in models]
 
             # Process each model for this video in parallel
-            with multiprocessing.Pool(min(len(pifpaf_models), 6)) as pool:
+            with multiprocessing.Pool(threads_num) as pool:
                 video_results = pool.map(process_video, video_tasks)
 
             for _, model_name, accuracy in video_results:
                 f_all.write(f"  {model_name}: {accuracy:.4f}\n")
 
 
+
 if __name__ == "__main__":
-    process_all_videos()
+    DATASET = "personpath22"  # personpath22 DETRAC
+    process_all_videos(DATASET, threads_num=6)

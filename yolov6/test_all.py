@@ -13,7 +13,6 @@ import torch
 from PIL import ImageFont
 from tqdm import tqdm
 
-from openpifpaf.both_openpifpaf import WIDTH, HEIGHT
 from yolov6.data.data_augment import letterbox
 from yolov6.layers.common import DetectBackend
 from yolov6.utils.events import LOGGER
@@ -22,14 +21,13 @@ from yolov6.utils.nms import non_max_suppression
 # Define YOLOv6 model versions
 models = ["yolov6s.pt", "yolov6n.pt", "yolov6m.pt", "yolov6l.pt", "yolov6n6.pt", "yolov6s6.pt", "yolov6m6.pt",
           "yolov6l6.pt"]
-excluded_models = ["yolov6l6.pt"]
+excluded_models = []
 
 models = [model for model in models if model not in excluded_models]
-models = ["yolov6l6.pt"]
 
 # Multiple of 64
-resolution_width = 960
-resolution_height = 576
+WIDTH = 1920
+HEIGHT = 1088
 
 
 # Define IoU calculation function
@@ -49,7 +47,7 @@ def calculate_iou(box1, box2):
 
 
 class YOLOv6Evaluator:
-    def __init__(self, model_path, device='0', img_size=[1920, 1088], half=True):
+    def __init__(self, model_path, img_size, device, half):
         self.model_path = model_path
         self.device = device
         self.img_size = img_size
@@ -217,8 +215,7 @@ class YOLOv6Evaluator:
 
     def process_video(self, video_path, annotation_path, conf_thres=0.25, iou_thres=0.45,
                       agnostic_nms=False, max_det=1000):
-        classes = [0, 2, 3, 5, 7]
-        """Process video with annotations and generate comparison video"""
+        classes = [0, 2, 3, 5, 7] # person, bicycle, car, motorcycle, bus
         # Load annotations
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
@@ -419,24 +416,24 @@ class CalcFPS:
 
 def process_video_for_model(args):
     """Process video for a specific model"""
-    video_path, model_path, MODE = args
+    video_path, model_path, DATASET = args
 
-    if MODE == "personpath22":
+    if DATASET == "personpath22":
         annotation_path = f"../dataset/personpath22/annotation/anno_visible_2022/{os.path.basename(video_path)}.json"
     else:
         annotation_path = f"../dataset/DETRAC_Upload/labels/annotations/{os.path.basename(video_path)}.json"
 
     # Skip if annotation doesn't exist
-    evaluator = YOLOv6Evaluator(model_path)
+    evaluator = YOLOv6Evaluator(model_path, img_size=[WIDTH, HEIGHT], device='0', half=True)
     return evaluator.process_video(video_path, annotation_path)
 
 
-def process_all_videos(MODE):
+def process_all_videos(DATASET, thread_num):
     # Create results directory
     os.makedirs("../results", exist_ok=True)
 
     # Get all MP4 files in the dataset directory
-    if MODE == "personpath22":
+    if DATASET == "personpath22":
         video_paths = glob.glob("../dataset/personpath22/raw_data/*.mp4")
     else:
         video_paths = glob.glob("../dataset/DETRAC_Upload/videos/*.mp4")
@@ -446,17 +443,17 @@ def process_all_videos(MODE):
     # Set up multiprocessing
     torch.multiprocessing.set_start_method("spawn", force=True)
 
-    with open(f"../results/all_results_{MODE}.txt", "a+") as f_all:
+    with open(f"../results/all_results_{DATASET}.txt", "a+") as f_all:
         for video_path in tqdm(video_paths):
             video_name = os.path.basename(video_path)
             f_all.write(f"\n{video_name}:\n")
             print(f"\nProcessing video: {video_name}")
 
             # Create tasks for current video only
-            video_tasks = [(video_path, model, MODE) for model in models]
+            video_tasks = [(video_path, f"weights/{model}", DATASET) for model in models]
 
             # Process each model for this video in parallel
-            with multiprocessing.Pool(2) as pool:
+            with multiprocessing.Pool(thread_num) as pool:
                 video_results = pool.map(process_video_for_model, video_tasks)
 
             for _, model_name, accuracy in video_results:
@@ -464,5 +461,5 @@ def process_all_videos(MODE):
 
 
 if __name__ == "__main__":
-    MODE = "DETRAC" # DETRAC personpath22
-    process_all_videos(MODE)
+    DATASET = "DETRAC" # DETRAC personpath22
+    process_all_videos(DATASET, thread_num=3)

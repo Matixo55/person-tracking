@@ -1,5 +1,6 @@
-1. Alternatywy YOLO
-2. Wykrywanie w sekwenji
+1. Wykrywanie w sekwenji
+2. Przyrównanie względem najmocniejszego as ground truth
+2. Maski semantyczne
 3. Optymalizacja najlepszych (co n klatek, hiperparametry)
 4. Śledzenie na podstawie detekcji
 5. Śledzenie niezależne

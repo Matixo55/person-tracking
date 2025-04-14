@@ -7,17 +7,20 @@ import time
 import psutil
 import GPUtil
 from ultralytics import YOLO
-import sys
 import glob
+
+"""
+Tylko modele ultralytics
+"""
 
 # Define YOLO model versions
 models = ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolov5n6u", "yolov5s6u", "yolov5m6u",
           "yolov5l6u", "yolov5x6u", "yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt", "yolov10n.pt",
           "yolov10s.pt", "yolov10m.pt", "yolov10b.pt", "yolov10x.pt", "yolov9t.pt", "yolov9s.pt", "yolov9m.pt",
           "yolov9c.pt", "yolov9e.pt", "yolo12n.pt", "yolo12s.pt", "yolo12m.pt", "yolo12l.pt", "yolo12x.pt"]
-EXCLUDED_MODELS = []
+EXCLUDED_DATASETLS = []
 
-models = [model for model in models if model not in EXCLUDED_MODELS]
+models = [model for model in models if model not in EXCLUDED_DATASETLS]
 
 # multiples of 32
 WIDTH, HEIGHT = 1920, 1088
@@ -68,7 +71,7 @@ def get_gpu_metrics():
 
 
 def process_video(args):
-    video_path, model_version, MODE, benchmark_mode = args
+    video_path, model_version, DATASET, benchmark_mode = args
 
     # Extract video name without extension
     video_name = os.path.basename(video_path)
@@ -94,15 +97,15 @@ def process_video(args):
     gpu_load_samples = []
 
 
-    if MODE == "personpath22":
+    if DATASET == "personpath22":
         annotation_path = f"dataset/personpath22/annotation/anno_visible_2022/{video_name}.json"
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
-    elif MODE == "DETRAC":
+    elif DATASET == "DETRAC":
         annotation_path = f"dataset/DETRAC_Upload/labels/annotations/{video_name}.json"
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
-    elif MODE == "benchmark" and not benchmark_mode:
+    elif DATASET == "benchmark" and not benchmark_mode:
         annotation_path = f"dataset/camera/annotations/{video_name}.json"
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
@@ -139,7 +142,7 @@ def process_video(args):
 
     # Load YOLO model
     model_name = model_version.replace(".pt", "")
-    model = YOLO(f"models/{model_version}")
+    model = YOLO(f"weights/{model_version}")
     i = 0
     # Process frames
     while cap.isOpened():
@@ -281,7 +284,7 @@ def process_video(args):
 
     # Calculate final accuracy
     final_accuracy = detected_annotations / total_annotations if total_annotations > 0 else 0
-    benchmark_metrics["accuracy"] = -1 # TODO final_accuracy
+    benchmark_metrics["accuracy"] = -1
 
     output_video_path = os.path.join(output_dir, f"{final_accuracy:.4f}_{model_name}_{WIDTH}x{HEIGHT}.mp4")
     print(benchmark_metrics)
@@ -299,14 +302,14 @@ def process_video(args):
     return video_name, model_name, benchmark_metrics
 
 
-def process_all_videos(MODE):
+def process_all_videos(DATASET):
     benchmark_mode = False
-    if MODE == "benchmark":
+    if DATASET == "benchmark":
         benchmark_mode = True
         video_paths = glob.glob("dataset/camera/*.mp4")
-    elif MODE == "DETRAC":
+    elif DATASET == "DETRAC":
         video_paths = glob.glob("dataset/DETRAC_Upload/videos/*.mp4")
-    elif MODE == "personpath22":
+    elif DATASET == "personpath22":
         video_paths = glob.glob("dataset/personpath22/raw_data/*.mp4")
 
     print(f"Found {len(video_paths)} videos")
@@ -324,8 +327,7 @@ def process_all_videos(MODE):
     all_benchmark_results = []
 
     # Process one video at a time with progress bar
-    with open(f"results/all_results_{MODE}.txt", "a+") as f_all:
-#       "Video,Model,FPS,Total_Time(s),Frames_Processed,Max_Memory(MB),Avg_Memory(MB),Max_GPU_Memory(MB),Avg_GPU_Memory(MB),Max_GPU_Load(%),Avg_GPU_Load(%)start_gpu_memory_used start_gpu_load start_memory_usage_mb\n")
+    with open(f"results/all_results_{DATASET}.txt", "a+") as f_all:
         for video_path in tqdm(video_paths):
             video_name = os.path.basename(video_path)
             f_all.write(f"\n{video_name}:\n")
@@ -333,13 +335,14 @@ def process_all_videos(MODE):
             # Create tasks for current video only
 
             for model in tqdm(models):
-                video_name, model_name, metrics = process_video((video_path, model, MODE, benchmark_mode))
+                video_name, model_name, metrics = process_video((video_path, model, DATASET, benchmark_mode))
 
                 if benchmark_mode:
                     # Store results for sorting
                     all_benchmark_results.append(metrics)
 
                     # Write CSV-formatted line
+                    # "Video,Model,FPS,Total_Time(s),Frames_Processed,Max_Memory(MB),Avg_Memory(MB),Max_GPU_Memory(MB),Avg_GPU_Memory(MB),Max_GPU_Load(%),Avg_GPU_Load(%)start_gpu_memory_used start_gpu_load start_memory_usage_mb\n")
                     f_all.write(
                         f"  {model_name}: {metrics['accuracy']:.4f} {metrics['fps']:.2f},{metrics['total_time']:.2f},{metrics['frames_processed']},{metrics['max_memory_usage_mb']:.2f},{metrics['avg_memory_usage_mb']:.2f},{metrics['max_gpu_memory_mb']:.2f},{metrics['avg_gpu_memory_mb']:.2f},{metrics['max_gpu_load']:.2f},{metrics['avg_gpu_load']:.2f},{metrics["start_gpu_memory_used"]:.2f},{metrics["start_gpu_load"]:.2f},{metrics["start_memory_usage_mb"]:.2f}\n")
                 else:
@@ -348,5 +351,5 @@ def process_all_videos(MODE):
 
 
 if __name__ == "__main__":
-    MODE = "benchmark"  #"DETRAC" "benchmark"
-    process_all_videos(MODE)
+    DATASET = "benchmark"  #DETRAC benchmark personpath22
+    process_all_videos(DATASET)

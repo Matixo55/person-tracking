@@ -1,25 +1,23 @@
-import cv2
+import glob
 import json
 import os
-import numpy as np
-import torch
 import time
-import psutil
-import GPUtil
-import glob
-from tqdm import tqdm
-import sys
 
-# Import YOLOv7 specific modules
+import GPUtil
+import cv2
+import numpy as np
+import psutil
+import torch
+from tqdm import tqdm
+
 from models.experimental import attempt_load
 from utils.general import non_max_suppression, scale_coords, set_logging
-from utils.torch_utils import select_device, time_synchronized
+from utils.torch_utils import select_device
 
-# Define YOLOv7 model versions
 models = ["yolov7.pt", "yolov7x.pt", "yolov7-w6.pt", "yolov7-e6.pt", "yolov7-d6.pt", "yolov7-e6e.pt"]
-EXCLUDED_MODELS = []
+EXCLUDED_DATASETLS = []
 
-models = [model for model in models if model not in EXCLUDED_MODELS]
+models = [model for model in models if model not in EXCLUDED_DATASETLS]
 
 # multiples of 32
 WIDTH, HEIGHT = 1920, 1088
@@ -54,7 +52,7 @@ def get_gpu_metrics():
 
 
 def process_video(args):
-    video_path, model_version, MODE, benchmark_mode = args
+    video_path, model_version, DATASET, benchmark_mode = args
 
     # Extract video name without extension
     video_name = os.path.basename(video_path)
@@ -79,16 +77,16 @@ def process_video(args):
     gpu_memory_samples = []
     gpu_load_samples = []
 
-    # Load annotations based on MODE
-    if MODE == "personpath22":
+    # Load annotations based on DATASET
+    if DATASET == "personpath22":
         annotation_path = f"../dataset/personpath22/annotation/anno_visible_2022/{video_name}.json"
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
-    elif MODE == "DETRAC":
+    elif DATASET == "DETRAC":
         annotation_path = f"../dataset/DETRAC_Upload/labels/annotations/{video_name}.json"
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
-    elif MODE == "benchmark" and not benchmark_mode:
+    elif DATASET == "benchmark" and not benchmark_mode:
         annotation_path = f"../dataset/camera/annotations/{video_name}.json"
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
@@ -323,14 +321,14 @@ def process_video(args):
     return video_name, model_name, benchmark_metrics
 
 
-def process_all_videos(MODE):
+def process_all_videos(DATASET):
     benchmark_mode = False
-    if MODE == "benchmark":
+    if DATASET == "benchmark":
         benchmark_mode = True
         video_paths = glob.glob("../dataset/camera/*.mp4")
-    elif MODE == "DETRAC":
+    elif DATASET == "DETRAC":
         video_paths = glob.glob("../dataset/DETRAC_Upload/videos/*.mp4")
-    elif MODE == "personpath22":
+    elif DATASET == "personpath22":
         video_paths = glob.glob("../dataset/personpath22/raw_data/*.mp4")
 
     # Set up multiprocessing
@@ -343,14 +341,14 @@ def process_all_videos(MODE):
     all_benchmark_results = []
 
     # Process one video at a time with progress bar
-    with open(f"../results/all_results_{MODE}.txt", "a+") as f_all:
+    with open(f"../results/all_results_{DATASET}.txt", "a+") as f_all:
         for video_path in tqdm(video_paths):
             video_name = os.path.basename(video_path)
             f_all.write(f"\n{video_name}:\n")
             print(f"\nProcessing video: {video_name}")
 
             for model in tqdm(models):
-                video_name, model_name, metrics = process_video((video_path, model, MODE, benchmark_mode))
+                video_name, model_name, metrics = process_video((video_path, model, DATASET, benchmark_mode))
 
                 if benchmark_mode:
                     # Store results for sorting
@@ -365,14 +363,11 @@ def process_all_videos(MODE):
 
 
 if __name__ == "__main__":
-    # Set up logging for YOLOv7
     set_logging()
 
-    # Allow the Model class in torch.serialization for YOLOv7
-    # This is important for YOLOv7 model loading
     from models.yolo import Model
 
     torch.serialization.add_safe_globals([Model])
 
-    MODE = "benchmark"  # Options: "DETRAC", "benchmark", "personpath22"
-    process_all_videos(MODE)
+    DATASET = "benchmark"  # Options: "DETRAC", "benchmark", "personpath22"
+    process_all_videos(DATASET)

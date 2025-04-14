@@ -21,15 +21,14 @@ from yolov6.utils.nms import non_max_suppression
 # Define YOLOv6 model versions
 models = ["yolov6s.pt", "yolov6n.pt", "yolov6m.pt", "yolov6l.pt", "yolov6n6.pt", "yolov6s6.pt", "yolov6m6.pt",
           "yolov6l6.pt"]
-EXCLUDED_MODELS = ["yolov6l6.pt"]  # You can exclude models that might cause issues
+EXCLUDED_DATASETLS = []
 
-models = [model for model in models if model not in EXCLUDED_MODELS]
+models = [model for model in models if model not in EXCLUDED_DATASETLS]
 
-# Multiple of 32 (for YOLOv6)
+# Multiple of 64
 WIDTH, HEIGHT = 1920, 1088
 
 
-# Function to get GPU metrics (same as in YOLOv7 script)
 def get_gpu_metrics():
     gpus = GPUtil.getGPUs()
     gpu = gpus[0]  # Get the first GPU
@@ -72,7 +71,7 @@ class CalcFPS:
 
 
 class YOLOv6Benchmark:
-    def __init__(self, model_path, device='0', img_size=[WIDTH, HEIGHT], half=True):
+    def __init__(self, model_path, device, img_size, half):
         self.model_path = model_path
         self.device = device
         self.img_size = img_size
@@ -116,9 +115,9 @@ class YOLOv6Benchmark:
 
     def check_img_size(self, img_size, s=32, floor=0):
         """Make sure image size is a multiple of stride s in each dimension, and return a new shape list of image."""
-        if isinstance(img_size, int):  # integer i.e. img_size=640
+        if isinstance(img_size, int):
             new_size = max(self.make_divisible(img_size, int(s)), floor)
-        elif isinstance(img_size, list):  # list i.e. img_size=[640, 480]
+        elif isinstance(img_size, list):
             new_size = [max(self.make_divisible(x, int(s)), floor) for x in img_size]
         else:
             raise Exception(f"Unsupported type of img_size: {type(img_size)}")
@@ -171,7 +170,7 @@ class YOLOv6Benchmark:
 
     def process_video(self, args):
         """Process a video with benchmarking metrics"""
-        video_path, model_version, MODE, benchmark_mode = args
+        video_path, model_version, DATASET, benchmark_mode = args
 
         # Extract video name without extension
         video_name = os.path.basename(video_path)
@@ -198,12 +197,12 @@ class YOLOv6Benchmark:
         gpu_memory_samples = []
         gpu_load_samples = []
 
-        # Load annotations based on MODE
-        if MODE == "personpath22":
+        # Load annotations based on DATASET
+        if DATASET == "personpath22":
             annotation_path = f"../dataset/personpath22/annotation/anno_visible_2022/{video_name}.json"
-        elif MODE == "DETRAC":
+        elif DATASET == "DETRAC":
             annotation_path = f"../dataset/DETRAC_Upload/labels/annotations/{video_name}.json"
-        elif MODE == "benchmark" and not benchmark_mode:
+        elif DATASET == "benchmark" and not benchmark_mode:
             annotation_path = f"../dataset/camera/annotations/{video_name}.json"
 
         try:
@@ -430,14 +429,14 @@ class YOLOv6Benchmark:
         return video_name, self.model_name, benchmark_metrics
 
 
-def process_all_videos(MODE):
+def process_all_videos(DATASET):
     benchmark_mode = False
-    if MODE == "benchmark":
+    if DATASET == "benchmark":
         benchmark_mode = True
         video_paths = glob.glob("../dataset/camera/*.mp4")
-    elif MODE == "DETRAC":
+    elif DATASET == "DETRAC":
         video_paths = glob.glob("../dataset/DETRAC_Upload/videos/*.mp4")
-    elif MODE == "personpath22":
+    elif DATASET == "personpath22":
         video_paths = glob.glob("../dataset/personpath22/raw_data/*.mp4")
 
     # Set up multiprocessing
@@ -450,7 +449,7 @@ def process_all_videos(MODE):
     all_benchmark_results = []
 
     # Process one video at a time with progress bar
-    with open(f"../results/all_results_{MODE}.txt", "a+") as f_all:
+    with open(f"../results/all_results_{DATASET}.txt", "a+") as f_all:
         for video_path in tqdm(video_paths):
             video_name = os.path.basename(video_path)
             f_all.write(f"\n{video_name}:\n")
@@ -458,8 +457,8 @@ def process_all_videos(MODE):
 
             for model in tqdm(models):
                 # Create benchmark instance for this model
-                benchmark = YOLOv6Benchmark(model)
-                video_name, model_name, metrics = benchmark.process_video((video_path, model, MODE, benchmark_mode))
+                benchmark = YOLOv6Benchmark(f"weights/{model}", device='0', img_size=[WIDTH, HEIGHT], half=False)
+                video_name, model_name, metrics = benchmark.process_video((video_path, model, DATASET, benchmark_mode))
 
                 if benchmark_mode:
                     # Store results for sorting
@@ -473,5 +472,5 @@ def process_all_videos(MODE):
 
 
 if __name__ == "__main__":
-    MODE = "benchmark"  # Options: "DETRAC", "benchmark", "personpath22"
-    process_all_videos(MODE)
+    DATASET = "benchmark"  # Options: "DETRAC", "benchmark", "personpath22"
+    process_all_videos(DATASET)
