@@ -17,16 +17,14 @@ from utils.general import (
     check_img_size, non_max_suppression, scale_coords)
 from utils.torch_utils import select_device
 
-# Define YOLOv4 model versions
 models = ["yolov4-p5.pt", "yolov4-p6.pt", "yolov4-p7.pt", "yolov4-p5_.pt", "yolov4-p6_.pt"]
-# You can exclude models if needed
 excluded_models = []
 
 models = [model for model in models if model not in excluded_models]
 
 # Multiple of 128
-resolution_width = 1920
-resolution_height = 1152
+WIDTH = 1920
+HEIGHT = 1152
 
 
 # Define IoU calculation function
@@ -43,20 +41,6 @@ def calculate_iou(box1, box2):
     union = box1_area + box2_area - intersection
 
     return intersection / union if union > 0 else 0
-
-
-class CalcFPS:
-    def __init__(self, nsamples=50):
-        self.framerate = deque(maxlen=nsamples)
-
-    def update(self, duration):
-        self.framerate.append(duration)
-
-    def accumulate(self):
-        if len(self.framerate) > 1:
-            return np.average(self.framerate)
-        else:
-            return 0.0
 
 
 def draw_text(
@@ -147,9 +131,6 @@ def evaluate_with_annotations(source, weights, annotation_path, img_size, conf_t
     output_dir = f"../output/{video_name}"
     os.makedirs(output_dir, exist_ok=True)
 
-    # Initialize FPS calculator
-    fps_calculator = CalcFPS(nsamples=50)
-
     # Get names
     names = model.module.names if hasattr(model, 'module') else model.names
 
@@ -209,8 +190,6 @@ def evaluate_with_annotations(source, weights, annotation_path, img_size, conf_t
 
             # Update FPS calculator
             inference_time = t2 - t1
-            fps_calculator.update(1.0 / max(inference_time, 1e-5))
-            avg_fps = fps_calculator.accumulate()
 
             # Process predictions
             predictions = []
@@ -299,8 +278,6 @@ def evaluate_with_annotations(source, weights, annotation_path, img_size, conf_t
             cv2.putText(frame, f"Model: {model_name}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cv2.putText(frame, f"Inference: {inference_time * 1000:.1f}ms", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
                         (255, 255, 255), 2)
-            cv2.putText(frame, f"FPS: {avg_fps:.1f}", (10, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                        (255, 255, 255), 2)
 
             frames.append(frame)
         frame_count += 1
@@ -330,10 +307,10 @@ def evaluate_with_annotations(source, weights, annotation_path, img_size, conf_t
 
 def process_video_for_model(args):
     """Process video for a specific model"""
-    video_path, model_path, dataset_mode = args
+    video_path, model_path, DATASET = args
 
     video_name = os.path.basename(video_path)
-    if dataset_mode == "personpath22":
+    if DATASET == "personpath22":
         # Just the filename without extension for personpath22
         annotation_path = f"../dataset/personpath22/annotation/anno_visible_2022/{video_name}.json"
     else:
@@ -344,26 +321,26 @@ def process_video_for_model(args):
         source=video_path,
         weights=model_path,
         annotation_path=annotation_path,
-        img_size=(resolution_width, resolution_height),
+        img_size=(WIDTH, HEIGHT),
         conf_thres=0.25,
         iou_thres=0.45
     )
 
 
-def process_all_videos(dataset_mode):
+def process_all_videos(DATASET, threads_num):
     """Process all videos in the dataset"""
     # Create results directory
     os.makedirs("../results", exist_ok=True)
 
     # Get base directory for videos
-    if dataset_mode == "personpath22":
+    if DATASET == "personpath22":
         video_paths = glob.glob("../dataset/personpath22/raw_data/*.mp4")
     else:
         video_paths = glob.glob("../dataset/DETRAC_Upload/videos/*.mp4")
 
 
     # Define specific videos to process
-    target_videos = ["uid_vid_00226.mp4", "uid_vid_00115.mp4", "uid_vid_00111.mp4", "uid_vid_00105.mp4"]
+    target_videos = video_paths
 
     # Create full paths for the target videos
     video_paths = []
@@ -376,7 +353,7 @@ def process_all_videos(dataset_mode):
     # Set up multiprocessing
     torch.multiprocessing.set_start_method("spawn", force=True)
 
-    with open(f"../results/all_results_{dataset_mode}.txt", "a+") as f_all:
+    with open(f"../results/all_results_{DATASET}.txt", "a+") as f_all:
         for video_path in tqdm(video_paths):
             video_name = os.path.basename(video_path)
             f_all.write(f"\n{video_name}:\n")
@@ -385,9 +362,9 @@ def process_all_videos(dataset_mode):
             # Create tasks for current video and all models
             video_tasks = []
             for model in models:
-                video_tasks.append((video_path, model, dataset_mode))
+                video_tasks.append((video_path, f"weights/{model}", DATASET))
             # Process sequentially
-            with multiprocessing.Pool(2) as pool:
+            with multiprocessing.Pool(threads_num) as pool:
                 video_results = pool.map(process_video_for_model, video_tasks)
 
             # Write results to file
@@ -396,7 +373,6 @@ def process_all_videos(dataset_mode):
 
 
 if __name__ == '__main__':
-    # Set the dataset mode: either "DETRAC" or "personpath22"
-    DATASET_MODE = "personpath22"
+    DATASET = "personpath22" # DETRAC personpath22
 
-    process_all_videos(DATASET_MODE)
+    process_all_videos(DATASET, threads_num=2)

@@ -17,7 +17,7 @@ from utils.torch_utils import select_device
 
 # Define YOLOv4 model versions
 models = ["yolov4-p5.pt", "yolov4-p6.pt", "yolov4-p7.pt", "yolov4-p5_.pt", "yolov4-p6_.pt"]
-EXCLUDED_MODELS = []  # You can exclude models that might cause issues
+EXCLUDED_MODELS = []
 
 models = [model for model in models if model not in EXCLUDED_MODELS]
 
@@ -408,7 +408,7 @@ def process_all_videos(MODE):
             for model in tqdm(models):
                 # Create benchmark instance for this model
                 benchmark = YOLOv4Benchmark(model)
-                video_name, model_name, metrics = benchmark.process_video((video_path, model, MODE, benchmark_mode))
+                video_name, model_name, metrics = benchmark.process_video((video_path, f"weights/{model}", MODE, benchmark_mode))
 
                 if benchmark_mode:
                     # Store results for sorting
