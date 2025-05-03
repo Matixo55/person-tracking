@@ -5,7 +5,6 @@ import multiprocessing
 import os
 import os.path as osp
 import time
-from collections import deque
 
 import cv2
 import numpy as np
@@ -28,6 +27,15 @@ models = [model for model in models if model not in excluded_models]
 # Multiple of 64
 WIDTH = 1920
 HEIGHT = 1088
+
+# Class names mapping for camera dataset
+CLASS_NAMES = {
+    0: "person",
+    2: "car",
+    3: "motorcycle",
+    5: "bus",
+    7: "truck"
+}
 
 
 # Define IoU calculation function
@@ -215,13 +223,18 @@ class YOLOv6Evaluator:
 
     def process_video(self, video_path, annotation_path, conf_thres=0.25, iou_thres=0.45,
                       agnostic_nms=False, max_det=1000):
-        classes = [0, 2, 3, 5, 7] # person, bicycle, car, motorcycle, bus
+        classes = [0, 2, 3, 5, 7]  # person, car, motorcycle, bus, truck
+
         # Load annotations
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
 
         # Open video
         cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print(f"Error: Could not open video {video_path}")
+            return os.path.basename(video_path), self.model_name, 0.0
+
         orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
@@ -243,17 +256,19 @@ class YOLOv6Evaluator:
         total_annotations = 0
         detected_annotations = 0
         frame_count = 0
-        fps_calculator = CalcFPS()
 
         # Store frames for writing to video after processing
         frames = []
-
+        i = 0
         # Process frames
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
+            i += 1
 
+            if i% 100 == 0:
+                print(i)
             # Resize frame to target resolution
             frame = cv2.resize(frame, (width, height))
 
@@ -299,6 +314,8 @@ class YOLOv6Evaluator:
             for annotation in frame_annotations:
                 bb = annotation.get("bb", [])
                 if bb:
+                    if annotation.get("class", -1) != 0:
+                        continue #people only
                     # Scale bounding box coordinates to match the resized frame
                     scale_x = width / orig_width
                     scale_y = height / orig_height
@@ -363,23 +380,15 @@ class YOLOv6Evaluator:
             inference_time = (t2 - t1) * 1000  # ms
 
             # Update FPS calculator
-            fps_calculator.update(1.0 / (t2 - t1))
-            avg_fps = fps_calculator.accumulate()
-
             # Draw info on frame
             cv2.putText(frame, f"Frame: {frame_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cv2.putText(frame, f"Accuracy: {accuracy:.2f} ({detected_annotations}/{total_annotations})",
                         (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cv2.putText(frame, f"Model: {model_name}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            cv2.putText(frame, f"Inference: {inference_time:.1f}ms", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                        (255, 255, 255), 2)
-            cv2.putText(frame, f"FPS: {avg_fps:.1f}", (10, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                        (255, 255, 255), 2)
 
             # Store frame
             frames.append(frame)
             frame_count += 1
-
 
         # Calculate final accuracy
         final_accuracy = detected_annotations / total_annotations if total_annotations > 0 else 0
@@ -400,57 +409,52 @@ class YOLOv6Evaluator:
         return video_name, model_name, final_accuracy
 
 
-class CalcFPS:
-    def __init__(self, nsamples: int = 50):
-        self.framerate = deque(maxlen=nsamples)
-
-    def update(self, duration: float):
-        self.framerate.append(duration)
-
-    def accumulate(self):
-        if len(self.framerate) > 1:
-            return np.average(self.framerate)
-        else:
-            return 0.0
-
-
 def process_video_for_model(args):
     """Process video for a specific model"""
-    video_path, model_path, DATASET = args
+    video_path, model_path, dataset = args
 
-    if DATASET == "personpath22":
+    # Set annotation path based on dataset
+    if dataset == "personpath22":
         annotation_path = f"../dataset/personpath22/annotation/anno_visible_2022/{os.path.basename(video_path)}.json"
-    else:
+    elif dataset == "camera":
+        annotation_path = f"../dataset/camera/annotations/{os.path.basename(video_path)}.json"
+    else:  # DETRAC
         annotation_path = f"../dataset/DETRAC_Upload/labels/annotations/{os.path.basename(video_path)}.json"
 
-    # Skip if annotation doesn't exist
+    # Check if annotation exists
+    if not os.path.exists(annotation_path):
+        print(f"Warning: Annotation file not found: {annotation_path}")
+        return os.path.basename(video_path), os.path.basename(model_path), 0.0
+
     evaluator = YOLOv6Evaluator(model_path, img_size=[WIDTH, HEIGHT], device='0', half=True)
     return evaluator.process_video(video_path, annotation_path)
 
 
-def process_all_videos(DATASET, thread_num):
+def process_all_videos(dataset, thread_num):
     # Create results directory
     os.makedirs("../results", exist_ok=True)
 
     # Get all MP4 files in the dataset directory
-    if DATASET == "personpath22":
+    if dataset == "personpath22":
         video_paths = glob.glob("../dataset/personpath22/raw_data/*.mp4")
-    else:
+    elif dataset == "camera":
+        video_paths = glob.glob("../dataset/camera/videos/*.mp4")
+    else:  # DETRAC
         video_paths = glob.glob("../dataset/DETRAC_Upload/videos/*.mp4")
 
-    print(f"Found {len(video_paths)} videos to process")
+    print(f"Found {len(video_paths)} videos to process in {dataset} dataset")
 
     # Set up multiprocessing
     torch.multiprocessing.set_start_method("spawn", force=True)
 
-    with open(f"../results/all_results_{DATASET}.txt", "a+") as f_all:
+    with open(f"../results/all_results_{dataset}.txt", "a+") as f_all:
         for video_path in tqdm(video_paths):
             video_name = os.path.basename(video_path)
             f_all.write(f"\n{video_name}:\n")
             print(f"\nProcessing video: {video_name}")
 
             # Create tasks for current video only
-            video_tasks = [(video_path, f"weights/{model}", DATASET) for model in models]
+            video_tasks = [(video_path, f"weights/{model}", dataset) for model in models]
 
             # Process each model for this video in parallel
             with multiprocessing.Pool(thread_num) as pool:
@@ -461,5 +465,6 @@ def process_all_videos(DATASET, thread_num):
 
 
 if __name__ == "__main__":
-    DATASET = "DETRAC" # DETRAC personpath22
-    process_all_videos(DATASET, thread_num=3)
+    # Choose dataset: "DETRAC", "personpath22", or "camera"
+    DATASET = "camera"
+    process_all_videos(DATASET, thread_num=1)
