@@ -24,6 +24,7 @@ models = ["yolov6s.pt", "yolov6n.pt", "yolov6m.pt", "yolov6l.pt", "yolov6n6.pt",
 EXCLUDED_DATASETLS = []
 
 models = [model for model in models if model not in EXCLUDED_DATASETLS]
+models = []
 
 # Multiple of 64
 WIDTH, HEIGHT = 1920, 1088
@@ -197,20 +198,6 @@ class YOLOv6Benchmark:
         gpu_memory_samples = []
         gpu_load_samples = []
 
-        # Load annotations based on DATASET
-        if DATASET == "personpath22":
-            annotation_path = f"../dataset/personpath22/annotation/anno_visible_2022/{video_name}.json"
-        elif DATASET == "DETRAC":
-            annotation_path = f"../dataset/DETRAC_Upload/labels/annotations/{video_name}.json"
-        elif DATASET == "benchmark" and not benchmark_mode:
-            annotation_path = f"../dataset/camera/annotations/{video_name}.json"
-
-        try:
-            with open(annotation_path, 'r') as f:
-                annotations = json.load(f)
-        except Exception as e:
-            print(f"Error loading annotations: {e}")
-            annotations = {"entities": []}
 
         # Create output directory
         output_dir = f"output/{video_name_no_ext}"
@@ -221,15 +208,11 @@ class YOLOv6Benchmark:
         detected_annotations = 0
         frame_count = 0
 
-        # We'll store frames for video writing later
-        frames = []
 
         # Open video
         cap = cv2.VideoCapture(video_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         benchmark_metrics["video_fps"] = fps
         benchmark_metrics["video_total_frames"] = total_frames
@@ -266,15 +249,6 @@ class YOLOv6Benchmark:
 
             frame_resized = cv2.resize(frame, (self.img_size[0], self.img_size[1]))
 
-            if not benchmark_mode:
-                frame_annotations = [entity for entity in annotations.get("entities", [])
-                                     if entity.get("blob", {}).get("frame_idx") == frame_count]
-
-                # Skip frames without annotations
-                if not frame_annotations:
-                    frame_count += 1
-                    continue
-
             # Prepare image for YOLOv6
             img, _ = self.process_image(frame_resized, self.img_size, self.stride, self.half)
             img = img.to(self.device)
@@ -299,7 +273,6 @@ class YOLOv6Benchmark:
                 benchmark_metrics["frames_processed"] += 1
 
             if not benchmark_mode:
-                # Process predictions
                 predictions = []
                 if len(det):
                     det[:, :4] = self.rescale(img.shape[2:], det[:, :4], frame_resized.shape).round()
@@ -307,85 +280,6 @@ class YOLOv6Benchmark:
                     for *xyxy, conf, cls in det:
                         x1, y1, x2, y2 = [int(x) for x in xyxy]
                         predictions.append(np.array([x1, y1, x2, y2, conf.cpu().numpy(), cls.cpu().numpy()]))
-
-                has_annotations = len(frame_annotations) > 0
-                frame_detected = 0
-
-                # Scale factor for annotations
-                scale_x = self.img_size[0] / orig_width
-                scale_y = self.img_size[1] / orig_height
-
-                # Draw annotations (red by default)
-                for annotation in frame_annotations:
-                    bb = annotation.get("bb", [])
-                    if bb:
-                        x = int(bb[0] * scale_x)
-                        y = int(bb[1] * scale_y)
-                        w = int(bb[2] * scale_x)
-                        h = int(bb[3] * scale_y)
-
-                        box_color = (0, 0, 255)  # Red by default (BGR format)
-                        cv2.rectangle(frame_resized, (x, y), (x + w, y + h), box_color, 2)
-                        label = f"GT:{annotation.get('type', '')}"
-                        cv2.putText(frame_resized, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
-
-                        # Check if this annotation is detected by YOLO
-                        detected = False
-                        for pred in predictions:
-                            pred_box = pred[:4]
-                            anno_box_xyxy = [x, y, x + w, y + h]
-                            iou = calculate_iou(pred_box, anno_box_xyxy)
-                            if iou > 0.3:
-                                detected = True
-                                break
-
-                        if detected:
-                            frame_detected += 1
-
-                        status = "DETECTED" if detected else "MISSED"
-                        status_color = (0, 255, 0) if detected else (0, 0, 255)
-
-                        # Change box color to green if detected
-                        if detected:
-                            box_color = (0, 255, 0)  # Green (BGR format)
-                            # Redraw the box with green color
-                            cv2.rectangle(frame_resized, (x, y), (x + w, y + h), box_color, 2)
-                            # Redraw the label
-                            cv2.putText(frame_resized, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
-
-                        cv2.putText(frame_resized, status, (x, y + h + 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, status_color,
-                                    2)
-
-                if has_annotations:
-                    total_annotations += len(frame_annotations)
-                    detected_annotations += frame_detected
-
-                # Draw YOLO detections (blue boxes)
-                for pred in predictions:
-                    box = pred[:4].astype(int)
-                    conf = pred[4]
-                    cls = int(pred[5])
-                    x1, y1, x2, y2 = box
-
-                    # Make all YOLO boxes blue
-                    color = (255, 0, 0)  # Blue in BGR format
-                    cv2.rectangle(frame_resized, (x1, y1), (x2, y2), color, 2)
-                    label = f"YOLO:{cls} {conf:.2f}"
-                    cv2.putText(frame_resized, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
-                # Draw frame info and metrics
-                accuracy = detected_annotations / total_annotations if total_annotations > 0 else 0
-                cv2.putText(frame_resized, f"Frame: {frame_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                            (255, 255, 255), 2)
-                cv2.putText(frame_resized, f"Accuracy: {accuracy:.2f} ({detected_annotations}/{total_annotations})",
-                            (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                cv2.putText(frame_resized, f"Model: {self.model_name}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                            (255, 255, 255),
-                            2)
-                cv2.putText(frame_resized, f"Time: {frame_process_time:.4f}s", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                            (255, 255, 255), 2)
-
-                frames.append(frame_resized)
 
             frame_count += 1
 
@@ -411,17 +305,7 @@ class YOLOv6Benchmark:
         final_accuracy = detected_annotations / total_annotations if total_annotations > 0 else -1
         benchmark_metrics["accuracy"] = final_accuracy
 
-        output_video_path = os.path.join(output_dir,
-                                         f"{final_accuracy:.4f}_{self.model_name}_{self.img_size[0]}x{self.img_size[1]}.mp4")
         print(benchmark_metrics)
-
-        # Write all stored frames to the video
-        if frames:
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_video_path, fourcc, fps, (self.img_size[0], self.img_size[1]))
-            for frame in frames:
-                out.write(frame)
-            out.release()
 
         # Release resources
         cap.release()
@@ -434,10 +318,6 @@ def process_all_videos(DATASET):
     if DATASET == "benchmark":
         benchmark_mode = True
         video_paths = glob.glob("../dataset/camera/*.mp4")
-    elif DATASET == "DETRAC":
-        video_paths = glob.glob("../dataset/DETRAC_Upload/videos/*.mp4")
-    elif DATASET == "personpath22":
-        video_paths = glob.glob("../dataset/personpath22/raw_data/*.mp4")
 
     # Set up multiprocessing
     torch.multiprocessing.set_start_method("spawn", force=True)

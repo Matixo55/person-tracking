@@ -40,7 +40,7 @@ def parse_model_centric(file_path, target_attributes):
 
 
 target_attrs = ["FPS",  "Avg_GPU_Load", "Avg_GPU_Memory"]
-model_data = parse_model_centric("all_results_benchmark.txt", target_attrs)
+model_data = parse_model_centric("../results/all_results_benchmark.txt", target_attrs)
 
 for key,value in model_data.items():
     model_data[key]["accuracy"] = avg[key]

@@ -23,10 +23,11 @@ models = ["yolov6s.pt", "yolov6n.pt", "yolov6m.pt", "yolov6l.pt", "yolov6n6.pt",
 excluded_models = []
 
 models = [model for model in models if model not in excluded_models]
+models = ["yolov6l.pt"]
 
-# Multiple of 64
-WIDTH = 1920
-HEIGHT = 1088
+# Multiple of 32
+WIDTH = 3840
+HEIGHT = 2176
 
 # Class names mapping for camera dataset
 CLASS_NAMES = {
@@ -85,6 +86,13 @@ class YOLOv6Evaluator:
 
         # Font setup
         self.font_check()
+
+
+    def __del__(self):
+        if hasattr(self, 'model'):
+            del self.model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def model_switch(self, model, img_size):
         ''' Model switch to deploy status '''
@@ -253,22 +261,23 @@ class YOLOv6Evaluator:
         print(f"Processing {model_name} on {video_name}...")
 
         # Track metrics
-        total_annotations = 0
-        detected_annotations = 0
         frame_count = 0
 
         # Store frames for writing to video after processing
-        frames = []
-        i = 0
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        tmp_video_path = os.path.join(output_dir, f"{model_name}_{width}x{height}.mp4")
+
+        out = cv2.VideoWriter(tmp_video_path, fourcc, fps, (WIDTH, HEIGHT))
+
+        total_total_annotations = 0
+        total_detected_annotations = 0
+
         # Process frames
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
-            i += 1
 
-            if i% 100 == 0:
-                print(i)
             # Resize frame to target resolution
             frame = cv2.resize(frame, (width, height))
 
@@ -276,8 +285,7 @@ class YOLOv6Evaluator:
             frame_annotations = [entity for entity in annotations.get("entities", [])
                                  if entity.get("blob", {}).get("frame_idx") == frame_count]
 
-            # Skip frames without annotations if needed
-            # If you want to process all frames, remove this condition
+            # Skip frames without annotations
             if not frame_annotations:
                 frame_count += 1
                 continue
@@ -289,10 +297,8 @@ class YOLOv6Evaluator:
                 img = img[None]  # expand for batch dim
 
             # Inference
-            t1 = time.time()
             with torch.no_grad():
                 pred_results = self.model(img)
-            t2 = time.time()
 
             # Apply NMS
             det = non_max_suppression(pred_results, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)[0]
@@ -306,16 +312,17 @@ class YOLOv6Evaluator:
                 for *xyxy, conf, cls in det:
                     x1, y1, x2, y2 = [int(x) for x in xyxy]
                     predictions.append(np.array([x1, y1, x2, y2, conf.cpu().numpy(), cls.cpu().numpy()]))
-
             has_annotations = len(frame_annotations) > 0
             frame_detected = 0
+            total_annotations = 0
+            detected_annotations = 0
+
 
             # Draw annotations (red by default)
             for annotation in frame_annotations:
                 bb = annotation.get("bb", [])
                 if bb:
-                    if annotation.get("class", -1) != 0:
-                        continue #people only
+                    total_annotations += 1
                     # Scale bounding box coordinates to match the resized frame
                     scale_x = width / orig_width
                     scale_y = height / orig_height
@@ -360,7 +367,6 @@ class YOLOv6Evaluator:
 
             # Update metrics if frame has annotations
             if has_annotations:
-                total_annotations += len(frame_annotations)
                 detected_annotations += frame_detected
 
             # Draw YOLO detections (blue boxes)
@@ -377,9 +383,7 @@ class YOLOv6Evaluator:
 
             # Draw frame info and metrics
             accuracy = detected_annotations / total_annotations if total_annotations > 0 else 0
-            inference_time = (t2 - t1) * 1000  # ms
 
-            # Update FPS calculator
             # Draw info on frame
             cv2.putText(frame, f"Frame: {frame_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cv2.putText(frame, f"Accuracy: {accuracy:.2f} ({detected_annotations}/{total_annotations})",
@@ -387,22 +391,17 @@ class YOLOv6Evaluator:
             cv2.putText(frame, f"Model: {model_name}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
             # Store frame
-            frames.append(frame)
+            out.write(frame)
             frame_count += 1
+            total_total_annotations += total_annotations
+            total_detected_annotations += detected_annotations
 
         # Calculate final accuracy
-        final_accuracy = detected_annotations / total_annotations if total_annotations > 0 else 0
-
-        # Create output video with accuracy in the filename
+        final_accuracy = total_detected_annotations / total_total_annotations if total_total_annotations > 0 else 0
         output_video_path = os.path.join(output_dir, f"{final_accuracy:.4f}_{model_name}_{width}x{height}.mp4")
-
+        os.rename(tmp_video_path, output_video_path)
         # Write all stored frames to the video
-        if frames:
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_video_path, fourcc, fps, (WIDTH, HEIGHT))
-            for frame in frames:
-                out.write(frame)
-            out.release()
+        out.release()
 
         # Release resources
         cap.release()
@@ -455,16 +454,22 @@ def process_all_videos(dataset, thread_num):
 
             # Create tasks for current video only
             video_tasks = [(video_path, f"weights/{model}", dataset) for model in models]
-
+            print(video_tasks)
             # Process each model for this video in parallel
             with multiprocessing.Pool(thread_num) as pool:
-                video_results = pool.map(process_video_for_model, video_tasks)
+                results = pool.map(process_video_for_model, video_tasks)
 
-            for _, model_name, accuracy in video_results:
+            for video_name, model_name, accuracy in results:
                 f_all.write(f"  {model_name}: {accuracy:.4f}\n")
+
+
+            import gc
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
     # Choose dataset: "DETRAC", "personpath22", or "camera"
     DATASET = "camera"
-    process_all_videos(DATASET, thread_num=1)
+    process_all_videos(DATASET, thread_num=3)

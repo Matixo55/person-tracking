@@ -13,7 +13,7 @@ from yolov6.utils.nms import non_max_suppression
 
 # Configuration
 MODEL_PATH = "weights/yolov6l.pt"  # Using YOLOv6l as requested
-INPUT_DIR = "../dataset/camera/videos/resized"
+INPUT_DIR = "../dataset/camera/videos"
 OUTPUT_DIR = "../dataset/camera/annotations"
 ANNOTATED_VIDEO_DIR = "../dataset/camera/ground_truth"
 DEVICE = '0'  # GPU device id (use 'cpu' for CPU)
@@ -29,6 +29,7 @@ CLASS_NAMES = {
 }
 MAX_DET = 300  # Maximum number of detections per image
 IMG_SIZE = (1920, 1088)
+TARGET_FPS = 5
 
 # Create output directories if they don't exist
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -168,14 +169,11 @@ class YOLOv6Detector:
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
+        divider = fps // TARGET_FPS
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         duration = total_frames / fps if fps else 0
         minutes = int(duration) // 60
         seconds = int(duration) % 60
-
-        # Calculate scaling factors if video isn't already at target resolution
-        scale_x = IMG_SIZE[0] / width
-        scale_y = IMG_SIZE[1] / height
 
         # Create output video writer
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -193,16 +191,14 @@ class YOLOv6Detector:
         print(f"Processing {video_path}...")
         print(f"Dimensions: {width}x{height}, FPS: {fps}, Duration: {minutes:02d}:{seconds:02d} (mm:ss)")
 
-        i = 0
-
         for _ in tqdm(range(total_frames)):
             ret, frame = cap.read()
             if not ret:
                 break
 
-            i+= 1
 
-            if i%2 == 1:
+            if frame_count%divider != 0:
+                frame_count+= 1
                 continue
 
             # Resize frame to target resolution if needed
@@ -230,9 +226,9 @@ class YOLOv6Detector:
                     "blob": {
                         "frame_idx": frame_count
                     },
-                    "confidence": det["confidence"],
+                    "confidence": round(det["confidence"], 2),
                     "class": det["class"],
-                    "class_name": CLASS_NAMES.get(det["class"], "unknown")
+                    "class_name": CLASS_NAMES.get(det["class"], "unknown"),
                 }
                 annotations["entities"].append(entity)
 
@@ -280,10 +276,10 @@ def main():
     # Get all videos
     video_files = glob.glob(os.path.join(INPUT_DIR, "*.mp4"))
     video_files= [
-        "../dataset/camera/videos/resized/Golski_Rejestrator 2_20250415121828_20250415123535_519830320.mp4",
-        "../dataset/camera/videos/resized/Aerodynamika_192.168.5.149_20250415073958_20250415083559_501510727.mp4",
-        "../dataset/camera/videos/resized/Mel_192.168.5.149_20250415114008_20250415123534_518974247.mp4",
-        "../dataset/camera/videos/resized/PLAC_192.168.5.1_20250415120616_20250415124035_518024578.mp4",
+        "../dataset/camera/videos/Golski_Rejestrator 2_20250415121828_20250415123535_519830320.mp4",
+        "../dataset/camera/videos/Aerodynamika_192.168.5.149_20250415073958_20250415083559_501510727.mp4",
+        "../dataset/camera/videos/Mel_192.168.5.149_20250415114008_20250415123534_518974247.mp4",
+        "../dataset/camera/videos/PLAC_192.168.5.1_20250415120616_20250415124035_518024578.mp4",
     ]
 
     print(f"Found {len(video_files)} videos")
